@@ -15,7 +15,9 @@ from agent.summary_agent import create_summary_agent
 from agent.weather_agent import create_weather_agent
 from context.app_context import AppContext
 from memory.memory_store import MemoryStore
+from runtime.hooks import HookManager, LoggingHook
 from runtime.logger import RuntimeLogger
+from runtime.runtime import AgentRuntime
 from service.reflection_service import ReflectionService
 from service.summary_service import SummaryService
 from tools.calculator import calculate
@@ -64,12 +66,6 @@ async def main():
 
     math_agent = create_math_agent(registry)
 
-    assistant = create_assistant(
-        registry,
-        weather_agent,
-        math_agent,
-    )
-
     session = SQLiteSession(
         "demo-session",
     )
@@ -79,6 +75,25 @@ async def main():
         memory=memory,
     )
 
+    logging = LoggingHook()
+
+    hook_manager = HookManager([
+        logging
+    ])
+
+    assistant = create_assistant(
+        registry,
+        weather_agent,
+        math_agent,
+    )
+
+    runtime = AgentRuntime(
+        agent=assistant,
+        session=session,
+        context=app_context,
+        hooks=hook_manager,
+    )
+
     while True:
         user_input = input("\nUser> ")
         if user_input.lower() == "exit":
@@ -86,11 +101,15 @@ async def main():
 
         app_context.current_query = user_input
 
-        result = Runner.run_streamed(
-            starting_agent=assistant,
+        # result = Runner.run_streamed(
+        #     starting_agent=assistant,
+        #     input=user_input,
+        #     session=session,
+        #     context=app_context,
+        # )
+
+        result = runtime.run_streamed(
             input=user_input,
-            session=session,
-            context=app_context,
         )
 
         print()
