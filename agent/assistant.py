@@ -2,6 +2,7 @@ import os
 
 from agents import Agent, RunContextWrapper
 
+from agent.guardrails import safety_guardrail
 from context.app_context import AppContext
 from memory.retriever import MemoryRetriever
 from memory.user_preference import UserPreference
@@ -11,7 +12,7 @@ from tools.registry import ToolRegistry
 
 def create_assistant(
         registry: ToolRegistry,
-        weather_agent: Agent[AppContext],
+        # weather_agent: Agent[AppContext],
         math_agent: Agent[AppContext],
         mcp_servers=None,
 ) -> Agent[AppContext]:
@@ -24,11 +25,14 @@ def create_assistant(
         instructions=build_instructions,
         model=os.getenv("LLM_MODEL"),
         handoffs=[
-            weather_agent,
+            # weather_agent,
             math_agent,
         ],
         tools=registry.get_tools(),
         mcp_servers=mcp_servers or [],
+        input_guardrails=[
+            safety_guardrail,
+        ],
     )
 
 def build_profile_prompt(profile: UserProfile) -> str:

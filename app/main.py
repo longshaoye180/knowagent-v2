@@ -5,6 +5,8 @@ from agents import set_default_openai_client, set_tracing_disabled, Runner, set_
     SQLiteSession
 from agents.mcp import MCPServerStdio
 from dotenv import load_dotenv
+load_dotenv()  # 必须在项目 import 之前加载，否则 guardrails.py 等模块级 Agent 拿不到环境变量
+
 from openai import AsyncOpenAI
 from openai.types.responses import ResponseTextDeltaEvent
 
@@ -26,9 +28,8 @@ from tools.preference import remember_preferences
 from tools.profile import remember_profile
 from tools.registry import ToolRegistry
 from tools.remember_memory import remember_memory
-from tools.weather import get_weather
+# from tools.weather import get_weather
 
-load_dotenv()
 
 async def main():
 
@@ -45,7 +46,7 @@ async def main():
 
     registry = ToolRegistry()
 
-    registry.register("weather", get_weather )
+    # registry.register("weather", get_weather )
 
     registry.register("calculator", calculate)
 
@@ -92,12 +93,32 @@ async def main():
             "args": [
                 "run",
                 "python",
-                "mcp_server/server.py"
+                "mcp_server/company_server.py"
             ]
         }
-    ) as mcp_server:
+    ) as company_server, \
+        MCPServerStdio(
+            params={
+                "command": "uv",
+                "args": [
+                    "run",
+                    "python",
+                    "mcp_server/weather_server.py"
+                ]
+            }
+        ) as weather_server, \
+        MCPServerStdio(
+            params={
+                "command": "uv",
+                "args": [
+                    "run",
+                    "python",
+                    "mcp_server/knowledge_server.py"
+                ]
+            }
+        ) as knowledge_server:
 
-        tools = await mcp_server.list_tools()
+        tools = await company_server.list_tools()
 
         print("\n=====================MCP Tool DisCovery=====================")
 
@@ -111,10 +132,12 @@ async def main():
 
         assistant = create_assistant(
             registry,
-            weather_agent,
+            # weather_agent,
             math_agent,
             mcp_servers=[
-                mcp_server,
+                company_server,
+                weather_server,
+                knowledge_server
             ]
         )
 
@@ -125,79 +148,79 @@ async def main():
             hooks=hooks,
         )
 
-    while True:
-        user_input = input("\nUser> ")
-        if user_input.lower() == "exit":
-            break
+        while True:
+            user_input = input("\nUser> ")
+            if user_input.lower() == "exit":
+                break
 
-        app_context.current_query = user_input
+            app_context.current_query = user_input
 
-        # result = Runner.run_streamed(
-        #     starting_agent=assistant,
-        #     input=user_input,
-        #     session=session,
-        #     context=app_context,
-        # )
+            # result = Runner.run_streamed(
+            #     starting_agent=assistant,
+            #     input=user_input,
+            #     session=session,
+            #     context=app_context,
+            # )
 
-        result = runtime.run_streamed(
-            input=user_input,
-        )
-
-        print()
-
-        async for event in result.stream_events():
-            if (
-                event.type == "raw_response_event"
-                and isinstance(event.data, ResponseTextDeltaEvent)
-            ):
-                print(event.data.delta, end="", flush=True)
-
-            elif event.type == "agent_updated_stream_event":
-                RuntimeLogger.title("Agent Switch")
-                RuntimeLogger.info(f"{event.new_agent.name}")
-
-            elif ( event.type == "run_item_stream_event" and event.name == "tool_called"):
-                RuntimeLogger.title("Tool Called")
-                RuntimeLogger.info(f"{event.item.raw_item.name}")
-
-
-            elif ( event.type == "run_item_stream_event" and event.name == "tool_output"):
-                RuntimeLogger.title("Tool Output")
-                RuntimeLogger.info(f"{event.item.output}")
-
-
-        print("\n")
-
-        print("=" * 60)
-        print(f"Last Agent : {result.last_agent.name}")
-
-        print()
-        print(result.final_output)
-        print()
-
-        if(hasattr(result.final_output, "model_dump")):
-            RuntimeLogger.info(
-                str(result.final_output.model_dump())
+            result = runtime.run_streamed(
+                input=user_input,
             )
 
-        print("=" * 60)
+            print()
 
-        RuntimeLogger.title("Memory")
-        RuntimeLogger.info(str(app_context.memory.all()))
+            async for event in result.stream_events():
+                if (
+                    event.type == "raw_response_event"
+                    and isinstance(event.data, ResponseTextDeltaEvent)
+                ):
+                    print(event.data.delta, end="", flush=True)
 
-        RuntimeLogger.title("Generate History")
+                elif event.type == "agent_updated_stream_event":
+                    RuntimeLogger.title("Agent Switch")
+                    RuntimeLogger.info(f"{event.new_agent.name}")
 
-        await SummaryService.maybe_generate_summary(
-            app_context,
-            session,
-            summary_agent
-        )
+                elif ( event.type == "run_item_stream_event" and event.name == "tool_called"):
+                    RuntimeLogger.title("Tool Called")
+                    RuntimeLogger.info(f"{event.item.raw_item.name}")
 
-        await ReflectionService.reflect(
-            context=app_context,
-            session=session,
-            reflection_agent=reflection_agent,
-        )
+
+                elif ( event.type == "run_item_stream_event" and event.name == "tool_output"):
+                    RuntimeLogger.title("Tool Output")
+                    RuntimeLogger.info(f"{event.item.output}")
+
+
+            print("\n")
+
+            print("=" * 60)
+            print(f"Last Agent : {result.last_agent.name}")
+
+            print()
+            print(result.final_output)
+            print()
+
+            if(hasattr(result.final_output, "model_dump")):
+                RuntimeLogger.info(
+                    str(result.final_output.model_dump())
+                )
+
+            print("=" * 60)
+
+            RuntimeLogger.title("Memory")
+            RuntimeLogger.info(str(app_context.memory.all()))
+
+            RuntimeLogger.title("Generate History")
+
+            await SummaryService.maybe_generate_summary(
+                app_context,
+                session,
+                summary_agent
+            )
+
+            await ReflectionService.reflect(
+                context=app_context,
+                session=session,
+                reflection_agent=reflection_agent,
+            )
 
 
 if __name__ == "__main__":
