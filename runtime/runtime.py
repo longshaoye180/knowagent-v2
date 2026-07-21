@@ -22,4 +22,5 @@ class AgentRuntime:
             input=input,
             session=self.session,
             context=self.context,
+            hooks=self.hooks,
         )

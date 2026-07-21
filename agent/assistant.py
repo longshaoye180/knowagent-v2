@@ -13,6 +13,7 @@ def create_assistant(
         registry: ToolRegistry,
         weather_agent: Agent[AppContext],
         math_agent: Agent[AppContext],
+        mcp_servers=None,
 ) -> Agent[AppContext]:
     """
     创建默认助手。
@@ -27,6 +28,7 @@ def create_assistant(
             math_agent,
         ],
         tools=registry.get_tools(),
+        mcp_servers=mcp_servers or [],
     )
 
 def build_profile_prompt(profile: UserProfile) -> str:

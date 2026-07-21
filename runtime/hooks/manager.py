@@ -25,3 +25,11 @@ class HookManager:
     async def on_tool_end(self, tool_name, output, context):
         for hook in self.hooks:
             await hook.on_tool_end(tool_name, output, context)
+
+    async def on_agent_start(self, agent, context):
+        for hook in self.hooks:
+            await hook.on_agent_start(agent, context)
+
+    async def on_agent_end(self, agent, context):
+        for hook in self.hooks:
+            await hook.on_agent_end(agent, context)

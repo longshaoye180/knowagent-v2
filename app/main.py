@@ -3,6 +3,7 @@ import os
 
 from agents import set_default_openai_client, set_tracing_disabled, Runner, set_default_openai_api, \
     SQLiteSession
+from agents.mcp import MCPServerStdio
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from openai.types.responses import ResponseTextDeltaEvent
@@ -15,7 +16,7 @@ from agent.summary_agent import create_summary_agent
 from agent.weather_agent import create_weather_agent
 from context.app_context import AppContext
 from memory.memory_store import MemoryStore
-from runtime.hooks import HookManager, LoggingHook
+from runtime.hooks import HookManager, LoggingHook, OpenAIRunHooksAdapter
 from runtime.logger import RuntimeLogger
 from runtime.runtime import AgentRuntime
 from service.reflection_service import ReflectionService
@@ -81,18 +82,48 @@ async def main():
         logging
     ])
 
-    assistant = create_assistant(
-        registry,
-        weather_agent,
-        math_agent,
+    hooks = OpenAIRunHooksAdapter(
+        hook_manager=hook_manager,
     )
 
-    runtime = AgentRuntime(
-        agent=assistant,
-        session=session,
-        context=app_context,
-        hooks=hook_manager,
-    )
+    async with MCPServerStdio(
+        params={
+            "command": "uv",
+            "args": [
+                "run",
+                "python",
+                "mcp_server/server.py"
+            ]
+        }
+    ) as mcp_server:
+
+        tools = await mcp_server.list_tools()
+
+        print("\n=====================MCP Tool DisCovery=====================")
+
+        for tool in tools:
+
+            print(f"Tool Name: {tool.name}")
+
+            print(f"Description: {tool.description}")
+
+            print("---------------------------------------")
+
+        assistant = create_assistant(
+            registry,
+            weather_agent,
+            math_agent,
+            mcp_servers=[
+                mcp_server,
+            ]
+        )
+
+        runtime = AgentRuntime(
+            agent=assistant,
+            session=session,
+            context=app_context,
+            hooks=hooks,
+        )
 
     while True:
         user_input = input("\nUser> ")
