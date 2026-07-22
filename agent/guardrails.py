@@ -88,7 +88,7 @@ async def output_safety_guardrail(
         output: str,
 ) -> GuardrailFunctionOutput:
     result = await Runner.run(
-        starting_agent=guardrail_agent,
+        starting_agent=output_guardrail_agent,
         input=output,
         context=ctx.context
     )
