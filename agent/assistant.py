@@ -2,7 +2,7 @@ import os
 
 from agents import Agent, RunContextWrapper
 
-from agent.guardrails import safety_guardrail
+from agent.guardrails import safety_guardrail, output_safety_guardrail
 from context.app_context import AppContext
 from memory.retriever import MemoryRetriever
 from memory.user_preference import UserPreference
@@ -33,6 +33,9 @@ def create_assistant(
         input_guardrails=[
             safety_guardrail,
         ],
+        output_guardrails=[
+            output_safety_guardrail,
+        ]
     )
 
 def build_profile_prompt(profile: UserProfile) -> str:
